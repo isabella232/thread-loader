@@ -60,11 +60,26 @@ class PoolWorker {
     this.writePipe.write(lengthBuffer);
   }
 
+  sendEOFMessage(err) {
+    this.onWorkerMessage({
+      type: 'end',
+      data: {
+        message: err.message,
+        details: err.details,
+        stack: err.stack,
+        hideStack: err.hideStack,
+      },
+    }, () => {});
+  }
+
   readNextMessage() {
     this.state = 'read length';
     this.readBuffer(4, (lengthReadError, lengthBuffer) => {
       if (lengthReadError) {
         console.error(`Failed to communicate with worker (read length) ${lengthReadError}`);
+        if (lengthReadError.name === 'EarlyEOFError') {
+          this.sendEOFMessage(lengthReadError);
+        }
         return;
       }
       this.state = 'length read';
@@ -73,6 +88,9 @@ class PoolWorker {
       this.readBuffer(length, (messageError, messageBuffer) => {
         if (messageError) {
           console.error(`Failed to communicate with worker (read message) ${messageError}`);
+          if (messageError.name === 'EarlyEOFError') {
+            this.sendEOFMessage(messageError);
+          }
           return;
         }
         this.state = 'message read';
@@ -94,6 +112,19 @@ class PoolWorker {
   onWorkerMessage(message, finalCallback) {
     const { type, id } = message;
     switch (type) {
+      case 'end': {
+        const err = new Error('worker terminated');
+        for (const key of Object.keys(this.jobs)) {
+          const job = this.jobs[key];
+          const jobCallback = job.callback;
+          delete this.jobs[key];
+          this.activeJobs -= 1;
+          this.onJobDone();
+          jobCallback(err);
+        }
+        finalCallback(err);
+        return;
+      }
       case 'job': {
         const { data, error, result } = message;
         asyncMapSeries(data, (length, callback) => this.readBuffer(length, callback), (eachErr, buffers) => {
