@@ -7,6 +7,15 @@ export default function readBuffer(pipe, length, callback) {
   let remainingLength = length;
   const buffers = [];
   const readChunk = () => {
+    const onEnd = () => {
+      if (terminated) {
+        return;
+      }
+      terminated = true;
+      const err = new Error(`Stream ended ${remainingLength.toString()} bytes prematurely`);
+      err.name = 'EarlyEOFError';
+      callback(err);
+    };
     const onChunk = (arg) => {
       if (terminated) {
         return;
@@ -24,21 +33,13 @@ export default function readBuffer(pipe, length, callback) {
       if (remainingLength === 0) {
         pipe.pause();
         pipe.removeListener('data', onChunk);
+        pipe.removeListener('end', onEnd);
         if (overflow) {
           pipe.unshift(overflow);
         }
         terminated = true;
         callback(null, Buffer.concat(buffers, length));
       }
-    };
-    const onEnd = () => {
-      if (terminated) {
-        return;
-      }
-      terminated = true;
-      const err = new Error(`Stream ended ${remainingLength.toString()} bytes prematurely`);
-      err.name = 'EarlyEOFError';
-      callback(err);
     };
     pipe.on('data', onChunk);
     pipe.on('end', onEnd);

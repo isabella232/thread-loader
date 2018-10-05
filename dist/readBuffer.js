@@ -30,6 +30,7 @@ function readBuffer(pipe, length, callback) {
       if (remainingLength === 0) {
         pipe.pause();
         pipe.removeListener('data', onChunk);
+        pipe.removeListener('end', onEnd);
         if (overflow) {
           pipe.unshift(overflow);
         }

@@ -45,3 +45,32 @@ test('EOF returned for early quit', (done) => {
   }
   readBuffer.default(mockEventStream, 8, cb);
 });
+
+test('no event emitter leak', (done) => {
+  process.on('warning', (warning) => {
+    expect(warning).toBe(null);
+  });
+  expect.assertions(20);
+  let eventCount = 0;
+  function read() {
+    eventCount += 1;
+    return this.push(Buffer.from(eventCount.toString()));
+  }
+  const mockEventStream = new stream.Readable({
+    objectMode: true,
+    read,
+  });
+  let count = 0;
+  function readLoop() {
+    if (count >= 20) {
+      done();
+      return;
+    }
+    readBuffer.default(mockEventStream, 8, (err) => {
+      expect(err).toBe(null);
+      count += 1;
+      readLoop();
+    });
+  }
+  readLoop();
+});
