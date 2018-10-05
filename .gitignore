@@ -4,8 +4,6 @@ npm-debug.log*
 yarn-debug.log*
 .eslintcache
 /coverage
-/dist
-/example/dist
 /example/node_modules
 /local
 /reports
