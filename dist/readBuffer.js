@@ -13,6 +13,15 @@ function readBuffer(pipe, length, callback) {
   var remainingLength = length;
   var buffers = [];
   var readChunk = function readChunk() {
+    var onEnd = function onEnd() {
+      if (terminated) {
+        return;
+      }
+      terminated = true;
+      var err = new Error(`Stream ended ${remainingLength.toString()} bytes prematurely`);
+      err.name = 'EarlyEOFError';
+      callback(err);
+    };
     var onChunk = function onChunk(arg) {
       if (terminated) {
         return;
@@ -37,15 +46,6 @@ function readBuffer(pipe, length, callback) {
         terminated = true;
         callback(null, Buffer.concat(buffers, length));
       }
-    };
-    var onEnd = function onEnd() {
-      if (terminated) {
-        return;
-      }
-      terminated = true;
-      var err = new Error(`Stream ended ${remainingLength.toString()} bytes prematurely`);
-      err.name = 'EarlyEOFError';
-      callback(err);
     };
     pipe.on('data', onChunk);
     pipe.on('end', onEnd);
